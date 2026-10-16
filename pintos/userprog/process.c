@@ -208,7 +208,7 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 	while(true){
-		thread_yield();
+		thread_yield(); //왜 해야되는지 찾아보기.
 	}
 	return -1;
 }
