@@ -206,7 +206,6 @@ process_exec (void *f_name) { //유저 프로그램 실행에 사용할 레지�
  * 이 함수는 문제 2-2에서 구현한다. 현재는 아무 작업도 하지 않는다. */
 int
 process_wait (tid_t child_tid UNUSED) {
-<<<<<<< Updated upstream
 	/* XXX: 힌트) process_wait(initd)가 반환하면 Pintos가 종료되므로,
 	 * XXX:       process_wait를 구현하기 전에는 이곳에 무한 루프를
 	 * XXX:       추가하는 것을 권장한다. */
@@ -219,15 +218,6 @@ process_wait (tid_t child_tid UNUSED) {
 	child_thread->kernel_thread_semaphore = &curr->wait_semaphore;
 	sema_down(&curr->wait_semaphore);
 	return 0;
-=======
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
-	while (true){
-	}
-
-	return -1;
->>>>>>> Stashed changes
 }
 
 /* 프로세스를 종료한다. thread_exit()에서 호출하는 함수이다. */
@@ -367,7 +357,6 @@ load (const char *file_name, struct intr_frame *if_) { //실행 파일을 메모
 		goto done;
 	process_activate (thread_current ()); // 현재 프로세스의 주소 공간을 활성화하는 단계.
 
-<<<<<<< Updated upstream
 	/* 실행 파일을 연다. */
 
 	size_t buffer_size = strlen(file_name) + 1;
@@ -377,11 +366,6 @@ load (const char *file_name, struct intr_frame *if_) { //실행 파일을 메모
 	char * program_name = strtok_r(buffer, " ", &name_save_ptr);
 
 	file = filesys_open (program_name);
-=======
-	/* Open executable file. */
-	//file name 토큰화
-	file = filesys_open (file_name);
->>>>>>> Stashed changes
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -456,50 +440,9 @@ load (const char *file_name, struct intr_frame *if_) { //실행 파일을 메모
 	if (!setup_stack (if_))
 		goto done;
 
-<<<<<<< Updated upstream
 
 	/* 실행 시작 주소를 설정한다. */
 	if_->rip = ehdr.e_entry;
-=======
-		/* Start address. */
-		if_->rip = ehdr.e_entry;
-		
-	char *file_name_copy, *save_ptr, *first_address, *token, *addresses[64];
-	int count;
-	count = 0;
-
-	strlcpy(file_name_copy, file_name, strlen(file_name)+1);
-		
-	if (file_name_copy != NULL) {
-			token = strtok_r (file_name_copy, " ", &save_ptr);
-			if_->rsp-=strlen(token)+1;
-			memcpy((void*)if_->rsp, token, strlen(token)+1);
-			
-			addresses[count] = (char *)if_->rsp;                       
-			count = count +1;
-		}
-
-	while ((token = strtok_r (NULL, " ", &save_ptr)) != NULL) {
-		if_->rsp-=strlen(token)+1;
-		memcpy((void*)if_->rsp, token, strlen(token)+1);
-
-		addresses[count] = (char *)if_->rsp;                     
-		count = count +1;
-    }
-
-	if_->rsp -= if_->rsp % 8;         
-    if_->rsp -= 8;                   
-    memset((void *)if_->rsp, 0, 8);  
-
-	if_->rsp -= count*sizeof(addresses[0]);
-    memcpy((void *)if_->rsp, addresses, count*sizeof(addresses[0]));
-
-	if_->R.rdi = count;
-	if_->R.rsi = if_->rsp;
-
-	if_->rsp -= 8;
-    memset((void *)if_->rsp, 0, 8);
->>>>>>> Stashed changes
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). parsing passing */

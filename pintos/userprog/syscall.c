@@ -36,7 +36,7 @@ syscall_init (void) {
 	write_msr(MSR_LSTAR, (uint64_t) syscall_entry);
 
 	/* The interrupt service rountine should not serve any interrupts
-	 * until the syscall_entry swaps the userland stack to the kernle
+	 * until the syscall_entry swaps the userland stack to the kernel
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
@@ -85,7 +85,6 @@ valid_read_buffer (const void *buffer, unsigned size) {
 
 /* The main system call interface */
 void
-<<<<<<< Updated upstream
 syscall_handler (struct intr_frame *f) {
     switch (f->R.rax) {
         case SYS_HALT:
@@ -122,12 +121,4 @@ syscall_handler (struct intr_frame *f) {
             terminate_process (-1);
             break;
     }
-=======
-syscall_handler (struct intr_frame *f UNUSED) {
-	// TODO: Your implementation goes here.
-
-
-	//printf()
-	thread_exit ();
->>>>>>> Stashed changes
 }
