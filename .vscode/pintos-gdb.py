@@ -1,4 +1,4 @@
-"""Keep GDB connected while Pintos boots each selected test in order."""
+"""Load user symbols and keep GDB connected across selected Pintos tests."""
 
 import json
 from pathlib import Path
@@ -12,6 +12,10 @@ class PintosSequence:
     def __init__(self, session):
         self.session = session
         self.breakpoint = None
+        self.build = Path(gdb.current_progspace().filename).resolve().parent
+        self.user_symbol_file = None
+        gdb.execute("set breakpoint pending on", to_string=True)
+        self.load_user_symbols(session["tests"][session["index"]])
         if len(session["tests"]) < 2:
             return
         source = Path(gdb.lookup_global_symbol("power_off").symtab.fullname())
@@ -28,6 +32,28 @@ class PintosSequence:
         # Commands run after stopping, so switching targets is safe here.
         self.breakpoint.commands = "silent\npython _pintos_sequence.advance()\ncontinue"
         gdb.write(f"Pintos sequence: {' -> '.join(session['tests'])}\n")
+
+    def unload_user_symbols(self):
+        if self.user_symbol_file is not None:
+            gdb.execute(
+                f"remove-symbol-file {json.dumps(str(self.user_symbol_file))}",
+                to_string=True,
+            )
+            self.user_symbol_file = None
+
+    def load_user_symbols(self, test):
+        self.unload_user_symbols()
+        for directory in ("tests/userprog", "tests/userprog/no-vm", "tests/filesys/base"):
+            executable = self.build / directory / test
+            if executable.is_file():
+                # ELF section addresses identify the user program's load address.
+                gdb.execute(
+                    f"add-symbol-file {json.dumps(str(executable))}",
+                    to_string=True,
+                )
+                self.user_symbol_file = executable
+                gdb.write(f"Pintos user symbols: {test}\n")
+                return
 
     def advance(self):
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
@@ -50,6 +76,7 @@ class PintosSequence:
         if reply["last"]:
             self.breakpoint.enabled = False
         gdb.write(f"\nPintos next test: {reply['test']}\n")
+        self.load_user_symbols(reply["test"])
         gdb.execute("monitor system_reset", to_string=True)
         gdb.execute("maintenance flush register-cache", to_string=True)
 
@@ -64,8 +91,10 @@ class PintosSequenceCommand(gdb.Command):
         if len(arguments) != 1:
             raise gdb.GdbError("Usage: pintos-sequence <session.json>")
         session = json.loads(Path(arguments[0]).read_text())
-        if _pintos_sequence and _pintos_sequence.breakpoint:
-            _pintos_sequence.breakpoint.delete()
+        if _pintos_sequence:
+            if _pintos_sequence.breakpoint:
+                _pintos_sequence.breakpoint.delete()
+            _pintos_sequence.unload_user_symbols()
         _pintos_sequence = PintosSequence(session)
 
 

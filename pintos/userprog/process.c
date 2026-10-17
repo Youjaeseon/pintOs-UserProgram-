@@ -57,10 +57,27 @@ process_create_initd (const char *file_name) {
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
+
+	size_t buffer_size = strlen(file_name) + 1;
+	char * fn_token = malloc(buffer_size);
+    char * token = NULL;
+	char * save_ptr = NULL;
+
+	if (fn_token != NULL) {
+    	strlcpy(fn_token, file_name, buffer_size);
+   		token = strtok_r(fn_token, " ", &save_ptr);
+	}
+
+	ASSERT(token);
+
+
 	/* FILE_NAME을 실행할 새 스레드를 생성한다. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
+	{
 		palloc_free_page (fn_copy);
+    	free(fn_token);
+	}
 	return tid;
 }
 
@@ -233,7 +250,7 @@ process_exit (void) {
 	process_cleanup ();
 	sema_up(curr->kernel_thread_semaphore);
 	//printf ("%s: exit(%d)\n", ...);
-	printf ("args-single: exit(0)\n");
+	//printf ("args-single: exit(0)\n");
 	
 }
 
