@@ -38,7 +38,7 @@ process_init (void) {
  * before process_create_initd() returns. Returns the initd's
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
-tid_t
+tid_t //실행할 명령 문자열을 복사하고 스레드 생성.
 process_create_initd (const char *file_name) {
 	char *fn_copy;
 	tid_t tid;
@@ -59,7 +59,7 @@ process_create_initd (const char *file_name) {
 
 /* A thread function that launches first user process. */
 static void
-initd (void *f_name) {
+initd (void *f_name) { //프로세스 초기화
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
@@ -161,7 +161,7 @@ error:
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
 int
-process_exec (void *f_name) {
+process_exec (void *f_name) { //유저 프로그램 실행에 사용할 레지스터 상태 준비.
 	char *file_name = f_name;
 	bool success;
 
@@ -190,20 +190,26 @@ process_exec (void *f_name) {
 }
 
 
-/* Waits for thread TID to die and returns its exit status.  If
- * it was terminated by the kernel (i.e. killed due to an
- * exception), returns -1.  If TID is invalid or if it was not a
- * child of the calling process, or if process_wait() has already
- * been successfully called for the given TID, returns -1
- * immediately, without waiting.
+/* TID에 해당하는 스레드가 종료될 때까지 기다린 후,
+ * 해당 스레드의 종료 상태(exit status)를 반환한다.
  *
- * This function will be implemented in problem 2-2.  For now, it
- * does nothing. */
+ * 만약 해당 스레드가 커널에 의해 강제로 종료되었다면
+ * (예: 예외가 발생하여 종료된 경우), -1을 반환한다.
+ *
+ * 다음과 같은 경우에는 기다리지 않고 즉시 -1을 반환한다.
+ *
+ * 1. TID가 유효하지 않은 경우
+ * 2. TID에 해당하는 스레드가 현재 호출한 프로세스의 자식이 아닌 경우
+ * 3. 해당 TID에 대해 process_wait()가 이미 성공적으로 호출된 경우
+ */
 int
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while(true){
+		thread_yield(); //왜 해야되는지 찾아보기.
+	}
 	return -1;
 }
 
@@ -320,23 +326,25 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
+// 인자를 전달하는 부분이 없다.
 static bool
-load (const char *file_name, struct intr_frame *if_) {
+load (const char *file_name, struct intr_frame *if_) { //실행 파일을 메모리에 올리고, 유저 프로그램이 실행을 시작할 수 있는 상태를 만들기 위한 함수.
 	struct thread *t = thread_current ();
-	struct ELF ehdr;
-	struct file *file = NULL;
-	off_t file_ofs;
+	struct ELF ehdr; //실행 파일의 ELF 헤더를 읽어 둘 공간.
+	struct file *file = NULL; // 열린 실행 파일을 커널에서 다루는 객체.
+	off_t file_ofs; //파일의 어느 위치에서 읽을지 나타내는 값.
 	bool success = false;
-	int i;
+	int i; // 프로그램 헤더를 순회하는 인덱스.
 
 	/* Allocate and activate page directory. */
+	// 페이지 할당 및 활성화. 즉, 가상주소를 실제 메모리로 연결하는 페이지 테이블.
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
-	process_activate (thread_current ());
+	process_activate (thread_current ()); // 현재 프로세스의 주소 공간을 활성화하는 단계.
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (file_name);  //원본 복사 후 슬라이싱. 첫 번째 인자가 file이름.
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -378,7 +386,7 @@ load (const char *file_name, struct intr_frame *if_) {
 			case PT_INTERP:
 			case PT_SHLIB:
 				goto done;
-			case PT_LOAD:
+			case PT_LOAD: // 메모리에 올릴 영역
 				if (validate_segment (&phdr, file)) {
 					bool writable = (phdr.p_flags & PF_W) != 0;
 					uint64_t file_page = phdr.p_offset & ~PGMASK;
@@ -408,7 +416,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Set up stack. */
-	if (!setup_stack (if_))
+	if (!setup_stack (if_))  
 		goto done;
 
 	/* Start address. */
