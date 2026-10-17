@@ -40,7 +40,12 @@ process_init (void) {
  * 실행을 마치고 종료될 수도 있다. initd의 스레드 ID를 반환하며,
  * 스레드를 생성할 수 없으면 TID_ERROR를 반환한다. 
  * 이 함수는 반드시 한 번만 호출해야 한다. */
-tid_t
+/* Starts the first userland program, called "initd", loaded from FILE_NAME.
+ * The new thread may be scheduled (and may even exit)
+ * before process_create_initd() returns. Returns the initd's
+ * thread id, or TID_ERROR if the thread cannot be created.
+ * Notice that THIS SHOULD BE CALLED ONCE. */
+tid_t //실행할 명령 문자열을 복사하고 스레드 생성.
 process_create_initd (const char *file_name) {
 	char *fn_copy;
 	tid_t tid;
@@ -61,7 +66,7 @@ process_create_initd (const char *file_name) {
 
 /* 첫 사용자 프로세스를 실행하는 스레드 함수. */
 static void
-initd (void *f_name) {
+initd (void *f_name) { //프로세스 초기화
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
@@ -163,7 +168,7 @@ error:
 /* 현재 실행 문맥을 f_name에 해당하는 프로그램으로 교체한다.
  * 실패하면 -1을 반환한다. */
 int
-process_exec (void *f_name) {
+process_exec (void *f_name) { //유저 프로그램 실행에 사용할 레지스터 상태 준비.
 	char *file_name = f_name;
 	bool success;
 
@@ -331,20 +336,26 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* FILE_NAME의 ELF 실행 파일을 현재 스레드에 적재한다.
  * *RIP에는 실행 시작 주소를, *RSP에는 초기 스택 포인터를 저장한다.
  * 성공하면 true, 실패하면 false를 반환한다. */
+/* Loads an ELF executable from FILE_NAME into the current thread.
+ * Stores the executable's entry point into *RIP
+ * and its initial stack pointer into *RSP.
+ * Returns true if successful, false otherwise. */
+// 인자를 전달하는 부분이 없다.
 static bool
-load (const char *file_name, struct intr_frame *if_) {
+load (const char *file_name, struct intr_frame *if_) { //실행 파일을 메모리에 올리고, 유저 프로그램이 실행을 시작할 수 있는 상태를 만들기 위한 함수.
 	struct thread *t = thread_current ();
-	struct ELF ehdr;
-	struct file *file = NULL;
-	off_t file_ofs;
+	struct ELF ehdr; //실행 파일의 ELF 헤더를 읽어 둘 공간.
+	struct file *file = NULL; // 열린 실행 파일을 커널에서 다루는 객체.
+	off_t file_ofs; //파일의 어느 위치에서 읽을지 나타내는 값.
 	bool success = false;
-	int i;
+	int i; // 프로그램 헤더를 순회하는 인덱스.
 
-	/* 페이지 테이블을 할당하고 활성화한다. */
+	/* Allocate and activate page directory. */
+	// 페이지 할당 및 활성화. 즉, 가상주소를 실제 메모리로 연결하는 페이지 테이블.
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
-	process_activate (thread_current ());
+	process_activate (thread_current ()); // 현재 프로세스의 주소 공간을 활성화하는 단계.
 
 	/* 실행 파일을 연다. */
 
@@ -396,7 +407,7 @@ load (const char *file_name, struct intr_frame *if_) {
 			case PT_INTERP:
 			case PT_SHLIB:
 				goto done;
-			case PT_LOAD:
+			case PT_LOAD: // 메모리에 올릴 영역
 				if (validate_segment (&phdr, file)) {
 					bool writable = (phdr.p_flags & PF_W) != 0;
 					uint64_t file_page = phdr.p_offset & ~PGMASK;
