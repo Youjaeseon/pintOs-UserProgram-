@@ -33,6 +33,8 @@ static struct list ready_list;
 /* sleep 상태의 스레드를 담는 리스트 선언 */
 static struct list sleep_list;
 
+static struct list all_thread_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -117,6 +119,7 @@ thread_init (void) { // 스레드를 생성
 	list_init (&ready_list);
 	list_init (&destruction_req);
 	list_init (&sleep_list);
+	list_init (&all_thread_list);
 	// list_init (&)
 
 	/* Set up a thread structure for the running thread. */
@@ -492,6 +495,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->old_priority = priority;
 	t->magic = THREAD_MAGIC;
 	list_init (&t->donors);
+	sema_init(&t->wait_semaphore, 0);
+	enum intr_level old_level = intr_disable ();
+	list_push_back(&all_thread_list, &t->all_thread_elem);
+	intr_set_level (old_level);
+
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -618,6 +626,8 @@ do_schedule(int status) {
 	while (!list_empty (&destruction_req)) {
 		struct thread *victim =
 			list_entry (list_pop_front (&destruction_req), struct thread, elem);
+
+		list_remove(&victim->all_thread_elem);
 		palloc_free_page(victim);
 	}
 	thread_current ()->status = status;
@@ -712,4 +722,24 @@ compare_donate_priority(const struct list_elem *a_, const struct list_elem *b_, 
 	const struct thread *b = list_entry(b_, struct thread, elem_donor);
 
 	return a->priority > b->priority;
+}
+
+/* TID가 일치하는 스레드를 찾는다. 없으면 NULL을 반환한다.
+ * 반환된 주소를 사용하는 동안 스레드가 해제되지 않도록 호출자가 보장해야 한다. */
+struct thread *find_from_all_thread_list(int64_t tid)
+{
+	enum intr_level old_level = intr_disable ();
+	struct thread *found = NULL;
+
+	for (struct list_elem *e = list_begin (&all_thread_list);
+		 e != list_end (&all_thread_list); e = list_next (e)) {
+		struct thread *t = list_entry (e, struct thread, all_thread_elem);
+		if (t->tid == tid) {
+			found = t;
+			break;
+		}
+	}
+
+	intr_set_level (old_level);
+	return found;
 }

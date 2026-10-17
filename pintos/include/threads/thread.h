@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -100,6 +101,11 @@ struct thread {
 	struct list_elem elem_donor;				/* donation용 리스트 삽입용 */
 	struct lock *wait_on_lock;					/* 대기 중인 lock */
 
+	struct list_elem all_thread_elem;
+
+	struct semaphore wait_semaphore; //세마포어 커널스레드만 사용
+	struct semaphore * kernel_thread_semaphore; //세마포어의 주소 
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -159,3 +165,5 @@ list_less_func compare_priority;
 list_less_func compare_cond_priority;
 list_less_func compare_waiters_priority;
 list_less_func compare_donate_priority;
+
+struct thread *find_from_all_thread_list(int64_t tid);

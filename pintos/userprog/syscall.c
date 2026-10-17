@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include <string.h>
 #include "threads/init.h" // 컴파일 전 헤더 내용을 현재 파일에 포함.
 #include "threads/mmu.h"
 #include "threads/vaddr.h"

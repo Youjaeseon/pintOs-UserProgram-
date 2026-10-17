@@ -71,7 +71,7 @@ sema_down (struct semaphore *sema) {
 	while (sema->value == 0) {  // Semaphore 0인 동안 - if문이 아닌 이유는? sema_up을 했다고 해도 semaphore의 허가를 얻은것이 아님.
 		//list_push_back (&sema->waiters, &thread_current ()->elem); // Sema->waitres에 현재 스레드 대기상태로 추가. 같은 elem을 동시에 여러 리스트에 넣으면 안된다.
 		
-		// list_insert_ordered(&sema->waiters,&thread_current()->elem,compare_priority,NULL); // 리스트에 원소 넣을 때 정렬 기준에 맞는 위치를 찾아 삽입하는 함수
+		//list_insert_ordered(&sema->waiters,&thread_current()->elem,compare_priority,NULL); // 리스트에 원소 넣을 때 정렬 기준에 맞는 위치를 찾아 삽입하는 함수
 		// 정렬해서 삽입하는 건 O(n), 그냥 삽입은 O(1) 최적화 가능.
 		list_push_back(&sema->waiters, &thread_current()->elem);
 		thread_block (); // A가 BLOCKED 되고 다른 스레드 실행. 이후 A가 CPU를 얻으면 thread_block 재개
