@@ -1,0 +1,64 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Pintos",
+            "type": "process",
+            "command": "make",
+            "options": {
+                "cwd": "${workspaceFolder}/pintos/userprog"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true,
+                "showReuseMessage": false,
+                "echo": false
+            }
+        },
+        {
+            "label": "Show Pintos test result",
+            "type": "process",
+            "command": "/usr/bin/python3",
+            "args": [
+                "${workspaceFolder}/.vscode/pintos-debug.py",
+                "--check"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "clear": false,
+                "showReuseMessage": false,
+                "echo": false
+            }
+        },
+        {
+            "label": "Run Pintos (all threads tests)",
+            "type": "process",
+            "command": "make",
+            "args": [
+                "check"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/pintos/threads",
+                "env": {
+                    "PATH": "${workspaceFolder}/pintos/utils:${env:PATH}"
+                }
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
+        }
+    ]
+}

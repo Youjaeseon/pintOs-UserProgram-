@@ -31,5 +31,5 @@ core
 
 AGENTS.md
 priority-scheduling-two-person-plan.md
-# 로컬 VS Code 설정
-/.vscode/
+# VS Code 디버깅 설정은 공유하고 Python 캐시는 제외
+/.vscode/__pycache__/
