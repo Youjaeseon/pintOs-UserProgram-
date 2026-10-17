@@ -1,6 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
-#include <stdint.h>
+#include <stdint.h> // 주소 계산에 사용.
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -8,7 +8,7 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
-#include "threads/init.h"
+#include "threads/init.h" // 컴파일 전 헤더 내용을 현재 파일에 포함.
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 
@@ -41,10 +41,83 @@ syscall_init (void) {
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 }
 
+static void
+terminate_process (int status) {
+    printf ("%s: exit(%d)\n", thread_name (), status);
+    thread_exit ();
+}
+
+static bool
+valid_read_buffer (const void *buffer, unsigned size) {
+    if (size == 0)
+        return true;
+
+    uintptr_t address = (uintptr_t) buffer; // 주소 값을 정수로 담기.
+
+    if (buffer == NULL || size - 1 > UINTPTR_MAX - address)
+        return false;
+
+    uintptr_t last = address + size - 1;
+
+    if (!is_user_vaddr ((void *) address)
+        || !is_user_vaddr ((void *) last))
+        return false;
+
+    unsigned remaining = size;
+
+    while (remaining > 0) {
+        if (pml4_get_page (thread_current ()->pml4,
+                          (void *) address) == NULL)
+            return false;
+
+        unsigned chunk = PGSIZE - pg_ofs ((void *) address);
+
+        if (chunk >= remaining)
+            break;
+
+        address += chunk;
+        remaining -= chunk;
+    }
+
+    return true;
+}
+
 /* The main system call interface */
 void
-syscall_handler (struct intr_frame *f UNUSED) {
-	// TODO: Your implementation goes here.
-	printf ("system call!\n");
-	thread_exit ();
+syscall_handler (struct intr_frame *f) {
+    switch (f->R.rax) {
+        case SYS_HALT:
+            power_off ();
+            break;
+
+        case SYS_EXIT:
+            terminate_process ((int) f->R.rdi);
+            break;
+
+        case SYS_WRITE: {
+            int fd = (int) f->R.rdi;
+            const void *buffer = (const void *) f->R.rsi;
+            unsigned size = (unsigned) f->R.rdx;
+
+            if (!valid_read_buffer (buffer, size)) {
+                terminate_process (-1);
+                break;
+            }
+
+            if (fd != 1) {
+                f->R.rax = -1;
+                break;
+            }
+
+            if (size > 0)
+                putbuf (buffer, size);
+
+            f->R.rax = size;
+            break;
+        }
+
+        default:
+            terminate_process (-1);
+            break;
+    }
 }
