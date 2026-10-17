@@ -31,5 +31,5 @@ core
 
 AGENTS.md
 priority-scheduling-two-person-plan.md
-.vscode/launch.json
-.vscode/tasks.json
+# 로컬 VS Code 설정
+/.vscode/

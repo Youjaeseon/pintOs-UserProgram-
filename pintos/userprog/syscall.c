@@ -7,6 +7,7 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include <string.h>
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -40,7 +41,26 @@ syscall_init (void) {
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
-	// TODO: Your implementation goes here.
-	printf ("system call!\n");
-	thread_exit ();
+	// TODO: Your implementation goes her.e
+
+	char *rsi = (char *)f->R.rsi;
+	char *rdi = (char *)f->R.rdi;
+	char *rax = (char *)f->R.rax;
+
+	if(rax == SYS_EXIT)
+	{
+		thread_exit();
+	}
+	else if(rax == SYS_WRITE)
+	{
+		if(rsi != NULL)
+		{
+			putbuf(rsi, strlen(rsi));
+		}
+	}
+	else
+	{
+
+	}
+
 }
