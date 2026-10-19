@@ -44,8 +44,10 @@ syscall_init (void) {
 
 static void
 terminate_process (int status) {
-    printf ("%s: exit(%d)\n", thread_name (), status);
-    thread_exit ();
+    // printf ("%s: exit(%d)\n", thread_name (), status);
+    // thread_exit ();
+    thread_current()->exit_status = status;
+    thread_exit();
 }
 
 static bool
