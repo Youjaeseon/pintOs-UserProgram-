@@ -100,9 +100,16 @@ initd (void *f_name) { //프로세스 초기화
  * TID_ERROR를 반환한다. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
+	struct fork_args *args = malloc (sizeof *args);
+
+	if (args == NULL)
+	    return TID_ERROR;
+
+	args->parent = thread_current ();
+	args->user_frame = *if_;
 	/* 현재 스레드를 새 스레드로 복제한다. */
 	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+			PRI_DEFAULT, __do_fork, args);
 }
 
 #ifndef VM
@@ -143,7 +150,8 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 static void
 __do_fork (void *aux) {
 	struct intr_frame if_;
-	struct thread *parent = (struct thread *) aux;
+	//struct thread *parent = (struct thread *) aux;
+	struct fork_args *fork_args = (struct fork_args *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if;
@@ -163,7 +171,7 @@ __do_fork (void *aux) {
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
 		goto error;
 #else
-	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
+	if (!pml4_for_each (fork_args->parent->pml4, duplicate_pte, fork_args->parent))
 		goto error;
 #endif
 
@@ -172,6 +180,11 @@ __do_fork (void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
+	/* TODO: 여기에 코드를 작성하세요.
+ 	 * TODO: 힌트) 파일 객체를 복제하려면
+ 	 * TODO:       include/filesys/file.h의 `file_duplicate`를 사용하세요.
+ 	 * TODO:       이 함수가 부모의 자원을 성공적으로 복제할 때까지
+ 	 * TODO:       부모는 fork()에서 반환해서는 안 됩니다. */
 
 	process_init ();
 
@@ -253,9 +266,6 @@ process_exit (void) {
 	 
 	process_cleanup ();
 	sema_up(curr->kernel_thread_semaphore);
-	//printf ("%s: exit(%d)\n", ...);
-	//printf ("args-single: exit(0)\n");
-	
 }
 
 /* 현재 프로세스의 자원을 해제한다. */

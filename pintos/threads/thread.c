@@ -13,6 +13,9 @@
 #include "intrinsic.h"
 // #include "../devices/timer.c"
 #include "lib/kernel/list.h"
+#include "threads/malloc.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -499,7 +502,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	enum intr_level old_level = intr_disable ();
 	list_push_back(&all_thread_list, &t->all_thread_elem);
 	intr_set_level (old_level);
-
+	t->file_discrpitor = NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -629,6 +632,8 @@ do_schedule(int status) {
 
 		list_remove(&victim->all_thread_elem);
 		palloc_free_page(victim);
+		free(victim->file_discrpitor);
+		victim->file_discrpitor = NULL;
 	}
 	thread_current ()->status = status;
 	schedule ();

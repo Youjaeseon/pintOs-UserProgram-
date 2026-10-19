@@ -12,9 +12,17 @@
 #include "threads/init.h" // 컴파일 전 헤더 내용을 현재 파일에 포함.
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
+#include "filesys/filesys.h"
+#include "threads/synch.h"
+#include "filesys/directory.h"
+#include "threads/malloc.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include "userprog/process.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
+bool vaild_addr(uint64_t addr);
 
 /* System call.
  *
@@ -85,6 +93,18 @@ valid_read_buffer (const void *buffer, unsigned size) {
     return true;
 }
 
+bool vaild_addr(uint64_t addr)
+{
+    if (addr == NULL || !is_user_vaddr (addr) || pml4_get_page (thread_current ()->pml4, addr) == NULL)
+    {
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f) {
@@ -118,6 +138,70 @@ syscall_handler (struct intr_frame *f) {
             f->R.rax = size;
             break;
         }
+
+        case SYS_CREATE: {
+            if(!vaild_addr(f->R.rdi))
+            {
+                terminate_process(-1);
+                break;
+            }
+            // f->R.rdi	"hello.txt" 문자열의 주소
+            // f->R.rsi	초기 크기 100
+            // f->R.rax	시스템 콜 번호 SYS_CREATE rax가 0이면 false
+            //int addr = (int) f->R.rdi;
+            char * file_name = (char *)f->R.rdi;
+            const void *size = (const void *) f->R.rsi;
+            unsigned temp = (unsigned) f->R.rdx;
+
+            if(file_name == NULL || *file_name == NULL || *file_name == '\000')
+            {
+                terminate_process(-1);
+                break;
+            }
+
+            bool success = filesys_create (file_name, size);
+            if(success == false)
+            {
+                f->R.rax = 0;
+                break;
+            }
+
+            f->R.rax = "1";
+            break;
+        }
+
+        case SYS_OPEN: {
+            char * file_name = (char *)f->R.rdi;
+            struct file * file = filesys_open(file_name);
+            struct thread * curr = thread_current();
+            int64_t file_discrpitor_index = 2;
+
+            if (curr->file_discrpitor == NULL)
+            {
+                curr->file_discrpitor = malloc(sizeof *curr->file_discrpitor);
+                if (curr->file_discrpitor == NULL)
+                {
+                    f->R.rax = -1;
+                    break;
+                }
+                memset(curr->file_discrpitor, 0, sizeof *curr->file_discrpitor);
+            }
+            if (file == NULL)
+            {
+                f->R.rax = -1;
+                break;
+            }
+            curr->file_discrpitor->file[file_discrpitor_index] = file;
+            f->R.rax = file_discrpitor_index;
+            break;
+        }
+
+        case SYS_FORK: {
+            char * process_name = (char *)f->R.rdi;
+            process_fork(process_name, f);
+            break;
+        }
+        
 
         default:
             terminate_process (-1);
