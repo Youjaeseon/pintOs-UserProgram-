@@ -100,16 +100,17 @@ initd (void *f_name) { //프로세스 초기화
  * TID_ERROR를 반환한다. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
+
 	struct fork_args *args = malloc (sizeof *args);
 
 	if (args == NULL)
 	    return TID_ERROR;
 
-	args->parent = thread_current ();
+	args->parent = thread_current (); 
 	args->user_frame = *if_;
 	/* 현재 스레드를 새 스레드로 복제한다. */
 	return thread_create (name,
-			PRI_DEFAULT, __do_fork, args);
+			PRI_DEFAULT, __do_fork, args); //반환값이 TID임. 확인해볼것.
 }
 
 #ifndef VM
@@ -149,23 +150,28 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
  *       따라서 process_fork의 두 번째 인자를 이 함수에 전달해야 한다. */
 static void
 __do_fork (void *aux) {
-	struct intr_frame if_;
 	//struct thread *parent = (struct thread *) aux;
 	struct fork_args *fork_args = (struct fork_args *) aux;
 	struct thread *current = thread_current ();
+	struct thread *parent = fork_args->parent;
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	
+	// 부모의 사용자 실행 문맥을 복사하고 자식 반환값 설정.
+	struct intr_frame if_ = fork_args->user_frame; // 찾아보기.
+	if_.R.rax = 0;
+	
 	bool succ = true;
 
+	// 부모의 인터럽트 프레임을 복사해서 자식의 인터럽트 프레임에 넣어줘야함.
 	/* 1. CPU 실행 문맥을 지역 변수 if_가 있는 스택으로 복사한다. */
-	memcpy (&if_, parent_if, sizeof (struct intr_frame));
-
-	/* 2. 페이지 테이블(PT)을 복제한다. */
-	current->pml4 = pml4_create();
+	//memcpy (&if_, if_.R.rax, sizeof (struct intr_frame));
+	
+	current->pml4 = pml4_create();	
 	if (current->pml4 == NULL)
 		goto error;
 
 	process_activate (current);
+
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
