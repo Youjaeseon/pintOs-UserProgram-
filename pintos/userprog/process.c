@@ -259,6 +259,11 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
+	if (curr->pml4 != NULL) {
+    printf("%s: exit(%d)\n", curr->name, curr->exit_status);
+    }
+
+	 
 	process_cleanup ();
 	sema_up(curr->kernel_thread_semaphore);
 }
