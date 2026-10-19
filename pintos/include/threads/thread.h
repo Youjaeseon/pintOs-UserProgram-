@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h"
+#include "filesys/file.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -105,6 +106,8 @@ struct thread {
 
 	struct semaphore wait_semaphore; //세마포어 커널스레드만 사용
 	struct semaphore * kernel_thread_semaphore; //세마포어의 주소 
+
+	struct file_discrpitor * file_discrpitor;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
