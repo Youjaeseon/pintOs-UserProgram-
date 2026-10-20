@@ -83,16 +83,15 @@ process_create_initd (const char *file_name) {
 	/* FILE_NAME을 실행할 새 스레드를 생성한다. */
 	tid = thread_create (token, PRI_DEFAULT, initd, initd_args);
 	if (tid == TID_ERROR) {
-		free (initd_args);
-		free (child_status);
-		free (fn_token);
-		palloc_free_page (fn_copy);
+		free(initd_args);
+		free(child_status);
+		free(fn_token);
+		palloc_free_page(fn_copy);
 		return TID_ERROR;
 	}
 
 	child_status->tid = tid;
 	list_push_back(&thread_current()->child_list, &child_status->elem);
-
 	return tid;
 }
 
@@ -131,7 +130,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	{
 	    return TID_ERROR;
 	}
-	
+
 	child_status->tid = 0;
 	child_status->exit_status = -1;
 	sema_init(&child_status->exit_sema, 0);
