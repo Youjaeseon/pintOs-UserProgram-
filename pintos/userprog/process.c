@@ -108,9 +108,30 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 
 	args->parent = thread_current (); 
 	args->user_frame = *if_;
+	args->success = false;
+	sema_init(&args->done, 0);
 	/* 현재 스레드를 새 스레드로 복제한다. */
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, args); //반환값이 TID임. 확인해볼것.
+	tid_t tid = thread_create (name,
+			PRI_DEFAULT, __do_fork, args); //반환값이 TID임.
+
+	if(tid == TID_ERROR){
+		free(args);
+		return TID_ERROR;
+	}
+
+	// 자식이 메모리와 파일을 모두 복제할 때까지 기다리기.
+	 sema_down(&args->done);
+
+	 bool success = args->success;
+	 free(args);
+
+	 if(success){
+		return tid;
+	 }
+	 else{
+		return TID_ERROR;
+	 }
+	
 }
 
 #ifndef VM
@@ -213,7 +234,7 @@ __do_fork (void *aux) {
  	 * TODO:       이 함수가 부모의 자원을 성공적으로 복제할 때까지
  	 * TODO:       부모는 fork()에서 반환해서는 안 됩니다. */
 
-	 for(int fd = 2; fd < 50; fd++){
+	for(int fd = 2; fd < 50; fd++){
 		struct file *parent_file = parent->file_discrpitor->file[fd];
 
 		if(parent_file == NULL)
@@ -225,8 +246,8 @@ __do_fork (void *aux) {
 			goto error;
 
 		current->file_discrpitor->file[fd] = child_file;
+	}
 
-	 }
 
 	process_init ();
 

@@ -6,6 +6,8 @@
 struct fork_args {
 	struct thread *parent;
 	struct intr_frame user_frame;
+	struct semaphore done;
+	bool success;
 };
 
 tid_t process_create_initd (const char *file_name);
