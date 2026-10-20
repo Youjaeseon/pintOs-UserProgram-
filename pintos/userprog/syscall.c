@@ -198,7 +198,18 @@ syscall_handler (struct intr_frame *f) {
 
         case SYS_FORK: {
             char * process_name = (char *)f->R.rdi;
-            process_fork(process_name, f);
+            tid_t tid = process_fork(process_name, f);
+            f->R.rax = tid;
+            break;
+        }
+
+        case SYS_WAIT: {
+            int64_t pid = f->R.rdi;
+            f->R.rax = process_wait (pid);
+            if(f->R.rax != 0)
+            {
+                terminate_process(-1);
+            }
             break;
         }
         
