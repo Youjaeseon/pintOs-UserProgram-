@@ -100,16 +100,38 @@ initd (void *f_name) { //프로세스 초기화
  * TID_ERROR를 반환한다. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
+
 	struct fork_args *args = malloc (sizeof *args);
 
 	if (args == NULL)
 	    return TID_ERROR;
 
-	args->parent = thread_current ();
+	args->parent = thread_current (); 
 	args->user_frame = *if_;
+	args->success = false;
+	sema_init(&args->done, 0);
 	/* 현재 스레드를 새 스레드로 복제한다. */
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, args);
+	tid_t tid = thread_create (name,
+			PRI_DEFAULT, __do_fork, args); //반환값이 TID임.
+
+	if(tid == TID_ERROR){
+		free(args);
+		return TID_ERROR;
+	}
+
+	// 자식이 메모리와 파일을 모두 복제할 때까지 기다리기.
+	 sema_down(&args->done);
+
+	 bool success = args->success;
+	 free(args);
+
+	 if(success){
+		return tid;
+	 }
+	 else{
+		return TID_ERROR;
+	 }
+	
 }
 
 #ifndef VM
@@ -124,21 +146,32 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if(is_kernel_vaddr(va))
+		return true;
 
 	/* 2. 부모의 최상위 페이지 테이블(PML4)에서 VA에 대응하는 페이지를 찾는다. */
 	parent_page = pml4_get_page (parent->pml4, va);
+	if(parent_page == NULL)
+		return false;
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	newpage = palloc_get_page(PAL_USER);
+	if(newpage == NULL)
+		return false;
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	memcpy(newpage,parent_page,PGSIZE);
+	writable = is_writable(pte);
 
 	/* 5. 자식의 페이지 테이블에서 주소 VA에 새 페이지를 연결하고,
 	 *    WRITABLE에 따라 쓰기 권한을 설정한다. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
+		palloc_free_page(newpage);
+		return false;
 	}
 	return true;
 }
@@ -147,25 +180,40 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 /* 부모의 실행 문맥을 복사하는 스레드 함수.
  * 힌트) parent->tf에는 프로세스의 사용자 모드 실행 문맥이 들어 있지 않다.
  *       따라서 process_fork의 두 번째 인자를 이 함수에 전달해야 한다. */
+// 새로 만들어진 자식이 부모의 상태를 복제하고, 사용자 프로그램으로 돌아갈 준비.
 static void
 __do_fork (void *aux) {
-	struct intr_frame if_;
 	//struct thread *parent = (struct thread *) aux;
 	struct fork_args *fork_args = (struct fork_args *) aux;
 	struct thread *current = thread_current ();
+	struct thread *parent = fork_args->parent;
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	
+	// 부모의 사용자 실행 문맥을 복사하고 자식 반환값 설정.
+	struct intr_frame if_ = fork_args->user_frame; // interrupt frame 복제.
+	if_.R.rax = 0;
+	
 	bool succ = true;
 
+	// 부모의 인터럽트 프레임을 복사해서 자식의 인터럽트 프레임에 넣어줘야함.
 	/* 1. CPU 실행 문맥을 지역 변수 if_가 있는 스택으로 복사한다. */
-	memcpy (&if_, parent_if, sizeof (struct intr_frame));
-
-	/* 2. 페이지 테이블(PT)을 복제한다. */
-	current->pml4 = pml4_create();
+	//memcpy (&if_, if_.R.rax, sizeof (struct intr_frame));
+	
+	current->pml4 = pml4_create();	
 	if (current->pml4 == NULL)
 		goto error;
 
+	if (parent->file_discrpitor != NULL){
+		
+		current->file_discrpitor = malloc(sizeof *current->file_discrpitor);
+
+		if(current->file_discrpitor == NULL)
+			goto error;
+
+		memset(current->file_discrpitor, 0, sizeof *current->file_discrpitor);
+	}
 	process_activate (current);
+
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
@@ -185,6 +233,21 @@ __do_fork (void *aux) {
  	 * TODO:       include/filesys/file.h의 `file_duplicate`를 사용하세요.
  	 * TODO:       이 함수가 부모의 자원을 성공적으로 복제할 때까지
  	 * TODO:       부모는 fork()에서 반환해서는 안 됩니다. */
+
+	for(int fd = 2; fd < 50; fd++){
+		struct file *parent_file = parent->file_discrpitor->file[fd];
+
+		if(parent_file == NULL)
+			continue;
+
+		struct file *child_file = file_duplicate(parent_file);
+
+		if(child_file == NULL)
+			goto error;
+
+		current->file_discrpitor->file[fd] = child_file;
+	}
+
 
 	process_init ();
 

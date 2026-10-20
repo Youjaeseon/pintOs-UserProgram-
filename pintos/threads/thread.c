@@ -632,8 +632,8 @@ do_schedule(int status) {
 
 		list_remove(&victim->all_thread_elem);
 		palloc_free_page(victim);
-		free(victim->file_discrpitor);
-		victim->file_discrpitor = NULL;
+		//free(victim->);
+		//victim->file_discrpitor = NULL;
 	}
 	thread_current ()->status = status;
 	schedule ();

@@ -17,8 +17,8 @@ test_main (void)
   char *buffer;
 
   CHECK ((handle = open ("sample.txt")) > 1, "open \"sample.txt\"");
-  
   if ((pid = fork("child"))){
+  
     wait (pid);
 
     buffer = get_boundary_area () - sizeof sample / 2;
