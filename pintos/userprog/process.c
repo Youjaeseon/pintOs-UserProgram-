@@ -59,8 +59,8 @@ process_create_initd (const char *file_name) {
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 
-	struct child_status * child_status = malloc (sizeof * child_status);
-	struct initd_args * initd_args = malloc (sizeof * initd_args);
+	struct child_status * child_status = malloc(sizeof * child_status);
+	struct initd_args * initd_args = malloc(sizeof * initd_args);
 
 
 	size_t buffer_size = strlen(file_name) + 1;
@@ -104,12 +104,12 @@ initd (void *aux) { //프로세스 초기화
 #endif
 
 	process_init ();
-	struct initd_args *args = aux;
-	char *f_name = args->file_name;
+	struct initd_args * args = aux;
+	char * f_name = args->file_name;
 
-	thread_current ()->my_status = args->status;
+	thread_current()->my_status = args->status;
 
-	free (args);
+	free(args);
 
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
@@ -121,8 +121,8 @@ initd (void *aux) { //프로세스 초기화
  * TID_ERROR를 반환한다. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
-	struct fork_args *fork_args = malloc (sizeof *fork_args);
-	struct child_status *child_status = malloc(sizeof * child_status);
+	struct fork_args * fork_args = malloc(sizeof * fork_args);
+	struct child_status * child_status = malloc(sizeof * child_status);
 	if(child_status == NULL)
 	{
 		return TID_ERROR;
@@ -136,7 +136,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	sema_init(&child_status->exit_sema, 0);
 
 
-	fork_args->parent = thread_current ();
+	fork_args->parent = thread_current();
 	fork_args->user_frame = *if_;
 	fork_args->child_status = child_status;
 	fork_args->fork_success = false;
@@ -148,11 +148,13 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	{
 		return TID_ERROR;
 	}
+
 	sema_down(&fork_args->fork_done);
 	if(fork_args->fork_success == false)
 	{
 		return TID_ERROR;
 	}
+	
 	child_status->tid = tid;
 	list_push_back(&thread_current()->child_list, &child_status->elem);
 	return tid;
@@ -220,16 +222,13 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 static void
 __do_fork (void *aux) {
 	struct intr_frame if_;
-	//struct thread *parent = (struct thread *) aux;
 	struct fork_args *fork_args = (struct fork_args *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if = &fork_args->user_frame;
 	bool succ = true;
 
-	//current->kernel_thread_semaphore = &fork_args->parent->wait_semaphore;
 	current->my_status = fork_args->child_status;
-
 
 	/* 1. CPU 실행 문맥을 지역 변수 if_가 있는 스택으로 복사한다. */
 	//자식의 RAX는 0으로 설정해야 합니다. 자식에게는 fork()가 0을 반환해야 하기 때문입니다.

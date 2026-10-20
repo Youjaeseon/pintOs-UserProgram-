@@ -9,7 +9,7 @@ struct fork_args {
     struct child_status *child_status;
 
     struct semaphore fork_done;
-    bool fork_success;  
+    bool fork_success;
 };
 
 struct initd_args {
