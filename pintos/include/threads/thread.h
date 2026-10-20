@@ -107,7 +107,8 @@ struct thread {
 	struct list_elem elem;              /* List element. */
 	struct list donors;						/* 도네한 스레드 리스트 */
 	struct list_elem elem_donor;				/* donation용 리스트 삽입용 */
-	struct lock *wait_on_lock;					/* 대기 중인 lock */
+	struct lock *wait_on_lock;			
+			/* 대기 중인 lock */
 
 	struct list_elem all_thread_elem;
 

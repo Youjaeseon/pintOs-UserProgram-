@@ -179,6 +179,8 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 
 	/* 2. 부모의 최상위 페이지 테이블(PML4)에서 VA에 대응하는 페이지를 찾는다. */
 	parent_page = pml4_get_page (parent->pml4, va);
+	if(parent_page == NULL)
+		return false;
 
 	if(parent_page == NULL)
 	{
@@ -190,7 +192,6 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 		/* 3. TODO: 자식용 새 페이지를 PAL_USER 옵션으로 할당하고,
 	 *    TODO: 반환된 주소를 NEWPAGE에 저장한다. */
 	newpage = palloc_get_page(PAL_USER);
-
 	if(newpage == NULL)
 	{
 		return false;
@@ -199,17 +200,14 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-		/* 4. TODO: 부모 페이지의 내용을 새 페이지로 복사한다.
-	 *    TODO: 부모 페이지에 쓰기가 허용되는지 확인하고,
-	 *    TODO: 그 결과에 따라 WRITABLE을 설정한다. */
-	memcpy (newpage, parent_page, PGSIZE);
+	memcpy(newpage,parent_page,PGSIZE);
 	writable = is_writable(pte);
 
 	/* 5. 자식의 페이지 테이블에서 주소 VA에 새 페이지를 연결하고,
 	 *    WRITABLE에 따라 쓰기 권한을 설정한다. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
-		/* 6. TODO: 페이지 매핑 추가에 실패하면 오류를 처리한다. */
-		palloc_free_page (newpage);
+		/* 6. TODO: if fail to insert page, do error handling. */
+		palloc_free_page(newpage);
 		return false;
 	}
 	return true;
@@ -219,11 +217,14 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 /* 부모의 실행 문맥을 복사하는 스레드 함수.
  * 힌트) parent->tf에는 프로세스의 사용자 모드 실행 문맥이 들어 있지 않다.
  *       따라서 process_fork의 두 번째 인자를 이 함수에 전달해야 한다. */
+// 새로 만들어진 자식이 부모의 상태를 복제하고, 사용자 프로그램으로 돌아갈 준비.
 static void
 __do_fork (void *aux) {
 	struct intr_frame if_;
+	//struct thread *parent = (struct thread *) aux;
 	struct fork_args *fork_args = (struct fork_args *) aux;
 	struct thread *current = thread_current ();
+	struct thread *parent = fork_args->parent;
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if = &fork_args->user_frame;
 	bool succ = true;
@@ -239,7 +240,17 @@ __do_fork (void *aux) {
 	if (current->pml4 == NULL)
 		goto error;
 
+	if (parent->file_discrpitor != NULL){
+		
+		current->file_discrpitor = malloc(sizeof *current->file_discrpitor);
+
+		if(current->file_discrpitor == NULL)
+			goto error;
+
+		memset(current->file_discrpitor, 0, sizeof *current->file_discrpitor);
+	}
 	process_activate (current);
+
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
@@ -259,6 +270,21 @@ __do_fork (void *aux) {
  	 * TODO:       include/filesys/file.h의 `file_duplicate`를 사용하세요.
  	 * TODO:       이 함수가 부모의 자원을 성공적으로 복제할 때까지
  	 * TODO:       부모는 fork()에서 반환해서는 안 됩니다. */
+
+	for(int fd = 2; fd < 50; fd++){
+		struct file *parent_file = parent->file_discrpitor->file[fd];
+
+		if(parent_file == NULL)
+			continue;
+
+		struct file *child_file = file_duplicate(parent_file);
+
+		if(child_file == NULL)
+			goto error;
+
+		current->file_discrpitor->file[fd] = child_file;
+	}
+
 
 	process_init ();
 

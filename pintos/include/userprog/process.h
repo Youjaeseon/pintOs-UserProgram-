@@ -4,17 +4,11 @@
 #include "threads/thread.h"
 
 struct fork_args {
-    struct thread *parent;
-    struct intr_frame user_frame;
-    struct child_status *child_status;
-
-    struct semaphore fork_done;
-    bool fork_success;
-};
-
-struct initd_args {
-    char *file_name;
-    struct child_status *status;
+  char *file_name;
+	struct thread *parent;
+	struct intr_frame user_frame;
+	struct semaphore done;
+	bool success;
 };
 
 tid_t process_create_initd (const char *file_name);
