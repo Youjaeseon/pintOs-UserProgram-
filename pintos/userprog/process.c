@@ -125,6 +125,8 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if(is_kernel_vaddr(va))
+		return true;
 
 	/* 2. 부모의 최상위 페이지 테이블(PML4)에서 VA에 대응하는 페이지를 찾는다. */
 	parent_page = pml4_get_page (parent->pml4, va);
@@ -148,6 +150,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 /* 부모의 실행 문맥을 복사하는 스레드 함수.
  * 힌트) parent->tf에는 프로세스의 사용자 모드 실행 문맥이 들어 있지 않다.
  *       따라서 process_fork의 두 번째 인자를 이 함수에 전달해야 한다. */
+// 새로 만들어진 자식이 부모의 상태를 복제하고, 사용자 프로그램으로 돌아갈 준비.
 static void
 __do_fork (void *aux) {
 	//struct thread *parent = (struct thread *) aux;
