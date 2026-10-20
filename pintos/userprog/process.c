@@ -142,7 +142,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-	memecpy(newpage,parent_page,PGSIZE);
+	memcpy(newpage,parent_page,PGSIZE);
 	writable = is_writable(pte);
 
 	/* 5. 자식의 페이지 테이블에서 주소 VA에 새 페이지를 연결하고,
@@ -169,7 +169,7 @@ __do_fork (void *aux) {
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	
 	// 부모의 사용자 실행 문맥을 복사하고 자식 반환값 설정.
-	struct intr_frame if_ = fork_args->user_frame; // 찾아보기.
+	struct intr_frame if_ = fork_args->user_frame; // interrupt frame 복제.
 	if_.R.rax = 0;
 	
 	bool succ = true;
@@ -182,6 +182,15 @@ __do_fork (void *aux) {
 	if (current->pml4 == NULL)
 		goto error;
 
+	if (parent->file_discrpitor != NULL){
+		
+		current->file_discrpitor = malloc(sizeof *current->file_discrpitor);
+
+		if(current->file_discrpitor == NULL)
+			goto error;
+
+		memset(current->file_discrpitor, 0, sizeof *current->file_discrpitor);
+	}
 	process_activate (current);
 
 #ifdef VM
