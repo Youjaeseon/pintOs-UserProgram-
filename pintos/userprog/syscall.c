@@ -206,10 +206,6 @@ syscall_handler (struct intr_frame *f) {
         case SYS_WAIT: {
             int64_t pid = f->R.rdi;
             f->R.rax = process_wait (pid);
-            if(f->R.rax != 0)
-            {
-                terminate_process(-1);
-            }
             break;
         }
         

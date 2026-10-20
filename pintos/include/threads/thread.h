@@ -37,6 +37,11 @@ struct child_status{
 	struct list_elem elem;
 };
 
+
+struct initd_args{
+	char * file_name;
+	struct child_status * status;
+};
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The

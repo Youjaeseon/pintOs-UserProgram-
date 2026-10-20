@@ -4,10 +4,11 @@
 #include "threads/thread.h"
 
 struct fork_args {
-  char *file_name;
+  	char *file_name;
 	struct thread *parent;
 	struct intr_frame user_frame;
 	struct semaphore done;
+	struct child_status * child_status;
 	bool success;
 };
 

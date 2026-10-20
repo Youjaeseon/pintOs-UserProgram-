@@ -138,8 +138,8 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	fork_args->parent = thread_current();
 	fork_args->user_frame = *if_;
 	fork_args->child_status = child_status;
-	fork_args->fork_success = false;
-	sema_init(&fork_args->fork_done, 0);
+	fork_args->success = false;
+	sema_init(&fork_args->done, 0);
 
 	/* 현재 스레드를 새 스레드로 복제한다. */
 	tid_t tid = thread_create (name,
@@ -149,8 +149,8 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 		return TID_ERROR;
 	}
 
-	sema_down(&fork_args->fork_done);
-	if(fork_args->fork_success == false)
+	sema_down(&fork_args->done);
+	if(fork_args->success == false)
 	{
 		return TID_ERROR;
 	}
@@ -271,19 +271,19 @@ __do_fork (void *aux) {
  	 * TODO:       이 함수가 부모의 자원을 성공적으로 복제할 때까지
  	 * TODO:       부모는 fork()에서 반환해서는 안 됩니다. */
 
-	for(int fd = 2; fd < 50; fd++){
-		struct file *parent_file = parent->file_discrpitor->file[fd];
+	// for(int fd = 2; fd < 50; fd++){
+	// 	struct file *parent_file = parent->file_discrpitor->file[fd];
 
-		if(parent_file == NULL)
-			continue;
+	// 	if(parent_file == NULL)
+	// 		continue;
 
-		struct file *child_file = file_duplicate(parent_file);
+	// 	struct file *child_file = file_duplicate(parent_file);
 
-		if(child_file == NULL)
-			goto error;
+	// 	if(child_file == NULL)
+	// 		goto error;
 
-		current->file_discrpitor->file[fd] = child_file;
-	}
+	// 	current->file_discrpitor->file[fd] = child_file;
+	// }
 
 
 	process_init ();
@@ -291,14 +291,14 @@ __do_fork (void *aux) {
 	/* 마지막으로 새로 생성한 프로세스로 실행을 전환한다. */
 	if (succ)
 	{
-		fork_args->fork_success = true;
-		sema_up(&fork_args->fork_done);
+		fork_args->success = true;
+		sema_up(&fork_args->done);
 		do_iret (&if_);
 	}
 error:
     current->exit_status = -1;
-    fork_args->fork_success = false;
-    sema_up (&fork_args->fork_done);
+    fork_args->success = false;
+    sema_up (&fork_args->done);
 	thread_exit ();
 }
 
