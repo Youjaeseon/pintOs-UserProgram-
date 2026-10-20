@@ -131,16 +131,17 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	{
 	    return TID_ERROR;
 	}
+	
 	child_status->tid = 0;
 	child_status->exit_status = -1;
 	sema_init(&child_status->exit_sema, 0);
-
 
 	fork_args->parent = thread_current();
 	fork_args->user_frame = *if_;
 	fork_args->child_status = child_status;
 	fork_args->fork_success = false;
 	sema_init(&fork_args->fork_done, 0);
+
 	/* 현재 스레드를 새 스레드로 복제한다. */
 	tid_t tid = thread_create (name,
 			PRI_DEFAULT, __do_fork, fork_args);
@@ -154,7 +155,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	{
 		return TID_ERROR;
 	}
-	
+
 	child_status->tid = tid;
 	list_push_back(&thread_current()->child_list, &child_status->elem);
 	return tid;
