@@ -213,6 +213,21 @@ __do_fork (void *aux) {
  	 * TODO:       이 함수가 부모의 자원을 성공적으로 복제할 때까지
  	 * TODO:       부모는 fork()에서 반환해서는 안 됩니다. */
 
+	 for(int fd = 2; fd < 50; fd++){
+		struct file *parent_file = parent->file_discrpitor->file[fd];
+
+		if(parent_file == NULL)
+			continue;
+
+		struct file *child_file = file_duplicate(parent_file);
+
+		if(child_file == NULL)
+			goto error;
+
+		current->file_discrpitor->file[fd] = child_file;
+
+	 }
+
 	process_init ();
 
 	/* 마지막으로 새로 생성한 프로세스로 실행을 전환한다. */
