@@ -503,6 +503,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_push_back(&all_thread_list, &t->all_thread_elem);
 	intr_set_level (old_level);
 	t->file_discrpitor = NULL;
+	list_init(&t->child_list);
+	t->my_status = NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -632,8 +634,6 @@ do_schedule(int status) {
 
 		list_remove(&victim->all_thread_elem);
 		palloc_free_page(victim);
-		free(victim->file_discrpitor);
-		victim->file_discrpitor = NULL;
 	}
 	thread_current ()->status = status;
 	schedule ();
@@ -748,3 +748,4 @@ struct thread *find_from_all_thread_list(int64_t tid)
 	intr_set_level (old_level);
 	return found;
 }
+

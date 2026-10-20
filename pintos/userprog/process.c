@@ -26,7 +26,7 @@
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
-static void initd (void *f_name);
+static void initd (void *aux);
 static void __do_fork (void *);
 
 /* initd와 다른 프로세스에 공통으로 적용하는 초기화 함수. */
@@ -34,6 +34,7 @@ static void
 process_init (void) {
 	struct thread *current = thread_current ();
 }
+
 
 /* FILE_NAME에서 불러온 첫 사용자 프로그램인 "initd"를 시작한다.
  * process_create_initd()가 반환하기 전에 새 스레드가 스케줄링되거나
@@ -58,6 +59,10 @@ process_create_initd (const char *file_name) {
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 
+	struct child_status * child_status = malloc (sizeof * child_status);
+	struct initd_args * initd_args = malloc (sizeof * initd_args);
+
+
 	size_t buffer_size = strlen(file_name) + 1;
 	char * fn_token = malloc(buffer_size);
     char * token = NULL;
@@ -67,28 +72,44 @@ process_create_initd (const char *file_name) {
     	strlcpy(fn_token, file_name, buffer_size);
    		token = strtok_r(fn_token, " ", &save_ptr);
 	}
-
 	ASSERT(token);
+
+	initd_args->file_name = fn_copy;
+	initd_args->status = child_status;
+	sema_init(&child_status->exit_sema, 0);
+	child_status->exit_status = 0;
 
 
 	/* FILE_NAME을 실행할 새 스레드를 생성한다. */
-	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
-	if (tid == TID_ERROR)
-	{
+	tid = thread_create (token, PRI_DEFAULT, initd, initd_args);
+	if (tid == TID_ERROR) {
+		free (initd_args);
+		free (child_status);
+		free (fn_token);
 		palloc_free_page (fn_copy);
-    	free(fn_token);
+		return TID_ERROR;
 	}
+
+	child_status->tid = tid;
+	list_push_back(&thread_current()->child_list, &child_status->elem);
+
 	return tid;
 }
 
 /* 첫 사용자 프로세스를 실행하는 스레드 함수. */
 static void
-initd (void *f_name) { //프로세스 초기화
+initd (void *aux) { //프로세스 초기화
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
 
 	process_init ();
+	struct initd_args *args = aux;
+	char *f_name = args->file_name;
+
+	thread_current ()->my_status = args->status;
+
+	free (args);
 
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
@@ -100,16 +121,41 @@ initd (void *f_name) { //프로세스 초기화
  * TID_ERROR를 반환한다. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
-	struct fork_args *args = malloc (sizeof *args);
-
-	if (args == NULL)
+	struct fork_args *fork_args = malloc (sizeof *fork_args);
+	struct child_status *child_status = malloc(sizeof * child_status);
+	if(child_status == NULL)
+	{
+		return TID_ERROR;
+	}
+	if(fork_args == NULL)
+	{
 	    return TID_ERROR;
+	}
+	child_status->tid = 0;
+	child_status->exit_status = -1;
+	sema_init(&child_status->exit_sema, 0);
 
-	args->parent = thread_current ();
-	args->user_frame = *if_;
+
+	fork_args->parent = thread_current ();
+	fork_args->user_frame = *if_;
+	fork_args->child_status = child_status;
+	fork_args->fork_success = false;
+	sema_init(&fork_args->fork_done, 0);
 	/* 현재 스레드를 새 스레드로 복제한다. */
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, args);
+	tid_t tid = thread_create (name,
+			PRI_DEFAULT, __do_fork, fork_args);
+	if(tid == TID_ERROR)
+	{
+		return TID_ERROR;
+	}
+	sema_down(&fork_args->fork_done);
+	if(fork_args->fork_success == false)
+	{
+		return TID_ERROR;
+	}
+	child_status->tid = tid;
+	list_push_back(&thread_current()->child_list, &child_status->elem);
+	return tid;
 }
 
 #ifndef VM
@@ -124,21 +170,45 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if(is_kernel_vaddr(va))
+	{
+		return true;
+	}
 
 	/* 2. 부모의 최상위 페이지 테이블(PML4)에서 VA에 대응하는 페이지를 찾는다. */
 	parent_page = pml4_get_page (parent->pml4, va);
 
+	if(parent_page == NULL)
+	{
+		return false;
+	}
+
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+		/* 3. TODO: 자식용 새 페이지를 PAL_USER 옵션으로 할당하고,
+	 *    TODO: 반환된 주소를 NEWPAGE에 저장한다. */
+	newpage = palloc_get_page(PAL_USER);
+
+	if(newpage == NULL)
+	{
+		return false;
+	}
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+		/* 4. TODO: 부모 페이지의 내용을 새 페이지로 복사한다.
+	 *    TODO: 부모 페이지에 쓰기가 허용되는지 확인하고,
+	 *    TODO: 그 결과에 따라 WRITABLE을 설정한다. */
+	memcpy (newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 
 	/* 5. 자식의 페이지 테이블에서 주소 VA에 새 페이지를 연결하고,
 	 *    WRITABLE에 따라 쓰기 권한을 설정한다. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
-		/* 6. TODO: if fail to insert page, do error handling. */
+		/* 6. TODO: 페이지 매핑 추가에 실패하면 오류를 처리한다. */
+		palloc_free_page (newpage);
+		return false;
 	}
 	return true;
 }
@@ -154,12 +224,17 @@ __do_fork (void *aux) {
 	struct fork_args *fork_args = (struct fork_args *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &fork_args->user_frame;
 	bool succ = true;
 
-	/* 1. CPU 실행 문맥을 지역 변수 if_가 있는 스택으로 복사한다. */
-	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	//current->kernel_thread_semaphore = &fork_args->parent->wait_semaphore;
+	current->my_status = fork_args->child_status;
 
+
+	/* 1. CPU 실행 문맥을 지역 변수 if_가 있는 스택으로 복사한다. */
+	//자식의 RAX는 0으로 설정해야 합니다. 자식에게는 fork()가 0을 반환해야 하기 때문입니다.
+	memcpy (&if_, parent_if, sizeof if_);
+	if_.R.rax = 0;
 	/* 2. 페이지 테이블(PT)을 복제한다. */
 	current->pml4 = pml4_create();
 	if (current->pml4 == NULL)
@@ -190,8 +265,15 @@ __do_fork (void *aux) {
 
 	/* 마지막으로 새로 생성한 프로세스로 실행을 전환한다. */
 	if (succ)
+	{
+		fork_args->fork_success = true;
+		sema_up(&fork_args->fork_done);
 		do_iret (&if_);
+	}
 error:
+    current->exit_status = -1;
+    fork_args->fork_success = false;
+    sema_up (&fork_args->fork_done);
 	thread_exit ();
 }
 
@@ -227,6 +309,23 @@ process_exec (void *f_name) { //유저 프로그램 실행에 사용할 레지�
 }
 
 
+/* 현재 프로세스의 자식 목록에서 CHILD_TID에 해당하는 종료 기록을 찾는다. */
+struct child_status *
+process_find_child_status (tid_t child_tid) {
+	struct thread *curr = thread_current ();
+
+	for (struct list_elem *e = list_begin (&curr->child_list);
+			e != list_end (&curr->child_list); e = list_next (e)) {
+		struct child_status *status =
+			list_entry (e, struct child_status, elem);
+
+		if (status->tid == child_tid)
+			return status;
+	}
+
+	return NULL;
+}
+
 /* 스레드 TID가 종료될 때까지 기다린 뒤 종료 상태를 반환한다.
  * 커널에 의해 종료된 경우, 즉 예외 때문에 종료된 경우에는 -1을 반환한다.
  * TID가 유효하지 않거나 호출한 프로세스의 자식이 아닌 경우,
@@ -239,15 +338,17 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: 힌트) process_wait(initd)가 반환하면 Pintos가 종료되므로,
 	 * XXX:       process_wait를 구현하기 전에는 이곳에 무한 루프를
 	 * XXX:       추가하는 것을 권장한다. */
-	struct thread * child_thread = find_from_all_thread_list(child_tid);
-	if(child_thread == NULL)
+
+	struct child_status *status = process_find_child_status (child_tid);
+	if (status == NULL)
 	{
 		return -1;
 	}
-	struct thread * curr = thread_current();
-	child_thread->kernel_thread_semaphore = &curr->wait_semaphore;
-	sema_down(&curr->wait_semaphore);
-	return 0;
+	list_remove(&status->elem);
+	sema_down(&status->exit_sema);
+
+	int result = status->exit_status;
+	return result;
 }
 
 /* 프로세스를 종료한다. thread_exit()에서 호출하는 함수이다. */
@@ -265,7 +366,12 @@ process_exit (void) {
 
 	 
 	process_cleanup ();
-	sema_up(curr->kernel_thread_semaphore);
+
+	if (curr->my_status != NULL) {
+		curr->my_status->exit_status = curr->exit_status;
+
+		sema_up (&curr->my_status->exit_sema);
+	}
 }
 
 /* 현재 프로세스의 자원을 해제한다. */
@@ -273,6 +379,19 @@ static void
 process_cleanup (void) {
 	struct thread *curr = thread_current ();
 
+		/* 열린 파일들을 먼저 닫는다. fd 닫는 기능 */
+	if (curr->file_discrpitor != NULL) {
+		for (int fd = 2; fd < 50; fd++) {
+			if (curr->file_discrpitor->file[fd] != NULL) {
+				file_close (curr->file_discrpitor->file[fd]);
+				curr->file_discrpitor->file[fd] = NULL;
+			}
+		}
+
+		/* 파일들을 닫은 뒤 FD 테이블 자체를 해제한다. */
+		free (curr->file_discrpitor);
+		curr->file_discrpitor = NULL;
+	}
 #ifdef VM
 	supplemental_page_table_kill (&curr->spt);
 #endif
