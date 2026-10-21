@@ -208,6 +208,50 @@ syscall_handler (struct intr_frame *f) {
             f->R.rax = process_wait (pid);
             break;
         }
+
+        case SYS_READ: {
+            int fd = (int) f->R.rdi;
+            void *buffer = (void *) f->R.rsi;
+            unsigned size = (unsigned) f->R.rdx;
+            struct thread *curr = thread_current();
+
+            /* TODO: buffer 전체 범위가 매핑되어 있고,
+            쓰기 가능한 사용자 메모리인지 검사.
+            잘못된 주소라면 terminate_process(-1). */
+            if(!valid_read_buffer(buffer,size))
+                terminate_process(-1);
+
+            /* 표준 입력은 일반 파일과 별도로 처리. */
+            if (fd == 0) {
+                /* TODO: input_getc()로 size바이트를 buffer에 저장.
+                읽은 바이트 수를 f->R.rax에 저장. */
+                break;
+            }
+
+            /* 배열 접근 전에 범위부터 검사해야 한다. */
+            if (fd < 2 || fd >= 50) {
+                f->R.rax = -1;
+                break;
+            }
+
+            if (curr->file_discrpitor == NULL) {
+                f->R.rax = -1;
+                break;
+            }
+
+            struct file *file = curr->file_discrpitor->file[fd];
+
+            if (file == NULL) {
+                f->R.rax = -1;
+                break;
+            }
+
+            /* TODO: 파일 시스템 공용 락이 있다면 여기서 획득. */
+            f->R.rax = file_read(file, buffer, size);
+            /* TODO: 획득한 락 해제. */
+
+            break;
+}
         
 
         default:
