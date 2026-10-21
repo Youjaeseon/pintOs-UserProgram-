@@ -77,5 +77,4 @@ get_fs_disk_write_cnt (void) {
 	asm volatile ("\t movq %%rax, %0": "=r" (write_cnt));
 	return write_cnt;
 }
-
 #endif /* lib/user/syscall.h */
