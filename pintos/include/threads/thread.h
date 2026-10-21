@@ -35,6 +35,9 @@ struct child_status{
 	int64_t exit_status;
 	struct semaphore exit_sema;
 	struct list_elem elem;
+	
+	int ref_count;          /* 기록 사용을 마치지 않은 쪽의 수 */
+	struct lock ref_lock;  /* ref_count 변경을 보호 */
 };
 
 
@@ -129,6 +132,7 @@ struct thread {
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 	int exit_status;
+	struct file *executable_file;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

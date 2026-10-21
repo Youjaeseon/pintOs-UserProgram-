@@ -20,4 +20,7 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (struct thread *next);
 
+
+extern struct lock filesys_lock;
+
 #endif /* userprog/process.h */

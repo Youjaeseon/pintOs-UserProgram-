@@ -58,10 +58,8 @@ process_create_initd (const char *file_name) {
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
-
 	struct child_status * child_status = malloc(sizeof * child_status);
 	struct initd_args * initd_args = malloc(sizeof * initd_args);
-
 
 	size_t buffer_size = strlen(file_name) + 1;
 	char * fn_token = malloc(buffer_size);
@@ -78,7 +76,8 @@ process_create_initd (const char *file_name) {
 	initd_args->status = child_status;
 	sema_init(&child_status->exit_sema, 0);
 	child_status->exit_status = 0;
-
+	child_status->ref_count = 2;
+	lock_init (&child_status->ref_lock);
 
 	/* FILE_NAME을 실행할 새 스레드를 생성한다. */
 	tid = thread_create (token, PRI_DEFAULT, initd, initd_args);
@@ -121,19 +120,21 @@ initd (void *aux) { //프로세스 초기화
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	struct fork_args * fork_args = malloc(sizeof * fork_args);
-	struct child_status * child_status = malloc(sizeof * child_status);
-	if(child_status == NULL)
-	{
-		return TID_ERROR;
-	}
 	if(fork_args == NULL)
 	{
 	    return TID_ERROR;
+	}
+	struct child_status * child_status = malloc(sizeof * child_status);
+	if (child_status == NULL) {
+		free(fork_args);
+		return TID_ERROR;
 	}
 
 	child_status->tid = 0;
 	child_status->exit_status = -1;
 	sema_init(&child_status->exit_sema, 0);
+	child_status->ref_count = 2;
+	lock_init (&child_status->ref_lock);
 
 	fork_args->parent = thread_current();
 	fork_args->user_frame = *if_;
@@ -146,6 +147,8 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 			PRI_DEFAULT, __do_fork, fork_args);
 	if(tid == TID_ERROR)
 	{
+		free(child_status);
+		free(fork_args);
 		return TID_ERROR;
 	}
 
@@ -309,6 +312,8 @@ process_exec (void *f_name) { //유저 프로그램 실행에 사용할 레지�
 	char *file_name = f_name;
 	bool success;
 
+	file_name = palloc_get_page(0);
+	strlcpy(file_name, f_name, PGSIZE);
 	/* thread 구조체 안의 intr_frame은 사용할 수 없다.
 	 * 현재 스레드가 다시 스케줄링될 때 해당 멤버에
 	 * 스레드의 실행 정보가 저장되기 때문이다. */
@@ -373,6 +378,21 @@ process_wait (tid_t child_tid UNUSED) {
 	sema_down(&status->exit_sema);
 
 	int result = status->exit_status;
+
+	lock_acquire (&status->ref_lock);
+	status->ref_count--;
+	bool last = false;
+	if(status->ref_count == 0)
+	{
+		last = true;
+	}
+	lock_release (&status->ref_lock);
+
+	if (last)
+	{
+		free (status);
+	}
+
 	return result;
 }
 
@@ -388,27 +408,15 @@ process_exit (void) {
 	if (curr->pml4 != NULL) {
     printf("%s: exit(%d)\n", curr->name, curr->exit_status);
     }
-
 	 
-	process_cleanup ();
-
-	if (curr->my_status != NULL) {
-		curr->my_status->exit_status = curr->exit_status;
-
-		sema_up (&curr->my_status->exit_sema);
-	}
-}
-
-/* 현재 프로세스의 자원을 해제한다. */
-static void
-process_cleanup (void) {
-	struct thread *curr = thread_current ();
-
-		/* 열린 파일들을 먼저 닫는다. fd 닫는 기능 */
+	/* 프로세스가 종료될 때 열린 파일과 FD 테이블을 정리한다. */
 	if (curr->file_discrpitor != NULL) {
 		for (int fd = 2; fd < 50; fd++) {
 			if (curr->file_discrpitor->file[fd] != NULL) {
+
+            	lock_acquire (&filesys_lock);
 				file_close (curr->file_discrpitor->file[fd]);
+            	lock_release (&filesys_lock);
 				curr->file_discrpitor->file[fd] = NULL;
 			}
 		}
@@ -417,10 +425,45 @@ process_cleanup (void) {
 		free (curr->file_discrpitor);
 		curr->file_discrpitor = NULL;
 	}
+
+	process_cleanup ();
+
+	struct child_status *status = curr->my_status;
+	if (status != NULL) {
+		status->exit_status = curr->exit_status;
+
+		sema_up (&status->exit_sema);
+
+		lock_acquire (&status->ref_lock);
+		status->ref_count--;
+		bool last = false;
+		if(status->ref_count == 0)
+		{
+			last = true;
+		}
+		lock_release (&status->ref_lock);
+
+		if (last)
+		{
+			free (status);
+		}
+	}
+}
+
+/* 현재 프로세스의 주소 공간을 해제한다. */
+static void
+process_cleanup (void) {
+	struct thread *curr = thread_current ();
+
 #ifdef VM
 	supplemental_page_table_kill (&curr->spt);
 #endif
-
+	if (curr->executable_file != NULL) {
+		lock_acquire (&filesys_lock);
+		file_close (curr->executable_file);
+		curr->executable_file = NULL;
+		lock_release (&filesys_lock);
+	}
 	uint64_t *pml4;
 	/* 현재 프로세스의 페이지 테이블을 제거하고,
 	 * 커널 주소만 매핑된 페이지 테이블로 전환한다. */
@@ -525,6 +568,7 @@ load (const char *file_name, struct intr_frame *if_) { //실행 파일을 메모
 	bool success = false;
 	int i; // 프로그램 헤더를 순회하는 인덱스.
 
+	lock_acquire(&filesys_lock);
 	/* Allocate and activate page directory. */
 	// 페이지 할당 및 활성화. 즉, 가상주소를 실제 메모리로 연결하는 페이지 테이블.
 	t->pml4 = pml4_create ();
@@ -545,6 +589,8 @@ load (const char *file_name, struct intr_frame *if_) { //실행 파일을 메모
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+
+	file_deny_write(file);
 
 	/* 실행 파일 헤더를 읽고 유효한지 검사한다. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -684,13 +730,17 @@ load (const char *file_name, struct intr_frame *if_) { //실행 파일을 메모
 	
 	free(buffer);
 	free(token_buffer);
-	//free(token_temp);
 
 	success = true;
 
 done:
 	/* 적재의 성공 여부와 관계없이 이곳에서 마무리한다. */
-	file_close (file);
+	if (success) {
+        t->executable_file = file;
+    } else {
+        file_close (file);
+    }
+	lock_release (&filesys_lock);
 	return success;
 }
 
