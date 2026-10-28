@@ -3,11 +3,24 @@
 
 #include "threads/thread.h"
 
+struct fork_args {
+  	char *file_name;
+	struct thread *parent;
+	struct intr_frame user_frame;
+	struct semaphore done;
+	struct child_status * child_status;
+	bool success;
+};
+
 tid_t process_create_initd (const char *file_name);
 tid_t process_fork (const char *name, struct intr_frame *if_);
 int process_exec (void *f_name);
+struct child_status *process_find_child_status (tid_t child_tid);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (struct thread *next);
+
+
+extern struct lock filesys_lock;
 
 #endif /* userprog/process.h */

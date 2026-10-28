@@ -5,6 +5,8 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
+#include "filesys/file.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -28,6 +30,21 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+struct child_status{
+	tid_t tid;
+	int64_t exit_status;
+	struct semaphore exit_sema;
+	struct list_elem elem;
+	
+	int ref_count;          /* 기록 사용을 마치지 않은 쪽의 수 */
+	struct lock ref_lock;  /* ref_count 변경을 보호 */
+};
+
+
+struct initd_args{
+	char * file_name;
+	struct child_status * status;
+};
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -98,11 +115,24 @@ struct thread {
 	struct list_elem elem;              /* List element. */
 	struct list donors;						/* 도네한 스레드 리스트 */
 	struct list_elem elem_donor;				/* donation용 리스트 삽입용 */
-	struct lock *wait_on_lock;					/* 대기 중인 lock */
+	struct lock *wait_on_lock;			
+			/* 대기 중인 lock */
+
+	struct list_elem all_thread_elem;
+
+	struct semaphore wait_semaphore; //세마포어 커널스레드만 사용
+	struct semaphore * kernel_thread_semaphore; //세마포어의 주소 
+
+	struct file_discrpitor * file_discrpitor;
+
+	struct list child_list;
+	struct child_status * my_status;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+	int exit_status;
+	struct file *executable_file;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
@@ -159,3 +189,5 @@ list_less_func compare_priority;
 list_less_func compare_cond_priority;
 list_less_func compare_waiters_priority;
 list_less_func compare_donate_priority;
+
+struct thread *find_from_all_thread_list(int64_t tid);

@@ -100,7 +100,19 @@ pintos_22.04_lab_docker/
 ---
 
 ## 7. C 파일에 브레이크포인트 설정 후 디버깅 (F5)
-pintos 랩에서는 vscode기반의 디버깅을 지원하지 않습니다. 
+
+컨테이너에서 프로젝트를 연 뒤, C 코드에 브레이크포인트를 설정하고 **F5**를 누릅니다.
+`debug_pintos`가 빌드 → `.vscode/pintos-debug.json`에서 선택한 테스트 실행 → GDB 연결 순서로 시작됩니다.
+기본 테스트는 `1`번 `args-none`이며, `pintos/userprog` 커널로 실행됩니다.
+학습 순서와 단계별 번호 범위는 `.vscode/pintos-debug.json`의 `study_stages`와 `test_order`에서 확인합니다. Project 2는 1~77번, 기존 alarm·priority는 78~95번이며 MLFQS는 제외합니다.
+브레이크포인트에서 F5로 계속 실행하면, 테스트 종료 후 **터미널**에 `[PASS]` 또는 `[FAIL]`과 채점 상세가 표시됩니다.
+테스트 완료 전에 디버깅을 중지하면 `[STOPPED]`로 표시됩니다.
+
+실행 파일, 테스트 인자와 필요한 보조 파일은 공식 테스트 설정을 따라 준비하며, 디버그 로그와 결과는 `pintos/userprog/build/debug/`에 저장됩니다.
+다른 테스트를 디버깅하려면 `.vscode/pintos-debug.json`의 `test` 값을 테스트 이름으로 바꿉니다.
+이전처럼 `test_order`의 번호나 `1~6`과 같은 범위로도 선택할 수 있습니다.
+전체 threads 테스트는 명령어 팔레트의 **Tasks: Run Task → Run Pintos (all threads tests)**로 실행합니다.
+GDB 포트(57391)가 사용 중이면 기존 디버그 세션을 중지한 뒤 F5를 누릅니다.
 
 ---
 ## 8. 새로운 Git 리포지토리에 Commit & Push 하기
